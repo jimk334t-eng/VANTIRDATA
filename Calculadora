@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Análisis Financiero — Sistema FV On-Grid</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', sans-serif; background: #f0f4f8; color: #1a202c; }
+
+  header {
+    background: linear-gradient(135deg, #1a4731, #2d7a4f);
+    color: white; padding: 28px 36px;
+  }
+  header h1 { font-size: 1.4rem; font-weight: 700; margin-bottom: 4px; }
+  header p { font-size: 0.85rem; opacity: 0.8; }
+
+  .container { max-width: 1100px; margin: 0 auto; padding: 28px 20px; }
+
+  /* KPI Cards */
+  .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 28px; }
+  .kpi { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.07); border-top: 4px solid #2d7a4f; }
+  .kpi.warn { border-top-color: #e07b00; }
+  .kpi.good { border-top-color: #2d7a4f; }
+  .kpi.info { border-top-color: #2563eb; }
+  .kpi.red  { border-top-color: #dc2626; }
+  .kpi-label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: #718096; margin-bottom: 6px; }
+  .kpi-value { font-size: 1.8rem; font-weight: 800; color: #1a202c; line-height: 1; }
+  .kpi-sub { font-size: 0.75rem; color: #718096; margin-top: 4px; }
+
+  /* Params panel */
+  .params { background: white; border-radius: 12px; padding: 22px 28px; box-shadow: 0 2px 8px rgba(0,0,0,0.07); margin-bottom: 28px; }
+  .params h2 { font-size: 0.95rem; font-weight: 700; margin-bottom: 16px; color: #2d3748; }
+  .param-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+  .param-item label { display: block; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: #718096; margin-bottom: 4px; }
+  .param-item input[type=number] {
+    width: 100%; padding: 8px 10px; border: 1.5px solid #e2e8f0; border-radius: 8px;
+    font-size: 0.95rem; font-weight: 600; color: #2d3748;
+    transition: border-color 0.2s;
+  }
+  .param-item input:focus { outline: none; border-color: #2d7a4f; }
+  .btn { background: #2d7a4f; color: white; border: none; padding: 10px 24px; border-radius: 8px; font-size: 0.9rem; font-weight: 600; cursor: pointer; margin-top: 16px; transition: background 0.2s; }
+  .btn:hover { background: #1a4731; }
+
+  /* Tables */
+  .card { background: white; border-radius: 12px; padding: 22px 28px; box-shadow: 0 2px 8px rgba(0,0,0,0.07); margin-bottom: 24px; }
+  .card h2 { font-size: 1rem; font-weight: 700; margin-bottom: 4px; color: #2d3748; }
+  .card .subtitle { font-size: 0.8rem; color: #718096; margin-bottom: 16px; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+  th { background: #f7fafc; padding: 10px 12px; text-align: left; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: #718096; border-bottom: 2px solid #e2e8f0; }
+  td { padding: 9px 12px; border-bottom: 1px solid #f0f4f8; color: #2d3748; }
+  tr:last-child td { border-bottom: none; }
+  .pos { color: #2d7a4f; font-weight: 600; }
+  .neg { color: #dc2626; font-weight: 600; }
+  .hl { background: #f0fdf4; font-weight: 700; }
+
+  /* Chart bars */
+  .bar-wrap { margin-top: 12px; }
+  .bar-row { display: flex; align-items: center; margin-bottom: 7px; font-size: 0.78rem; }
+  .bar-label { width: 52px; color: #718096; flex-shrink: 0; }
+  .bar-track { flex: 1; background: #f0f4f8; border-radius: 4px; height: 18px; overflow: hidden; margin: 0 8px; }
+  .bar-fill { height: 100%; border-radius: 4px; transition: width 0.4s ease; }
+  .bar-fill.gen { background: linear-gradient(90deg, #2d7a4f, #4ade80); }
+  .bar-fill.van { background: linear-gradient(90deg, #2563eb, #60a5fa); }
+  .bar-val { width: 90px; text-align: right; font-weight: 600; color: #2d3748; flex-shrink: 0; }
+
+  /* Formula box */
+  .formula { background: #f7fafc; border-left: 4px solid #2d7a4f; border-radius: 0 8px 8px 0; padding: 14px 18px; margin: 12px 0; font-family: 'Courier New', monospace; font-size: 0.82rem; color: #2d3748; line-height: 1.7; }
+
+  /* LCOE breakdown */
+  .lcoe-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  @media(max-width:600px){ .lcoe-grid { grid-template-columns: 1fr; } }
+
+  .conclusion-box { background: linear-gradient(135deg, #f0fdf4, #dcfce7); border: 1.5px solid #86efac; border-radius: 12px; padding: 20px 24px; }
+  .conclusion-box h3 { color: #1a4731; font-size: 0.95rem; margin-bottom: 10px; }
+  .conclusion-box p { font-size: 0.83rem; color: #2d3748; line-height: 1.7; }
+  .conclusion-box strong { color: #1a4731; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>⚡ Análisis Financiero — Sistema Fotovoltaico On-Grid</h1>
+  <p>Familia Gutiérrez López · Barrio Marabol · Santa Cruz de la Sierra, Bolivia · 18,5 kWp · 32 paneles × 585 W</p>
+</header>
+
+<div class="container">
+
+  <!-- Parámetros editables -->
+  <div class="params">
+    <h2>⚙️ Parámetros del proyecto (editables)</h2>
+    <div class="param-grid">
+      <div class="param-item"><label>Inversión inicial (Bs)</label><input type="number" id="capex" value="115390"></div>
+      <div class="param-item"><label>Generación año 1 (kWh/año)</label><input type="number" id="gen1" value="27978"></div>
+      <div class="param-item"><label>Tarifa eléctrica (Bs/kWh)</label><input type="number" id="tarifa" value="0.612" step="0.001"></div>
+      <div class="param-item"><label>Tasa de descuento (%)</label><input type="number" id="tasa" value="8" step="0.5"></div>
+      <div class="param-item"><label>Degradación paneles (%/año)</label><input type="number" id="deg" value="0.3" step="0.1"></div>
+      <div class="param-item"><label>O&M anual (Bs)</label><input type="number" id="om" value="2000"></div>
+      <div class="param-item"><label>Vida útil (años)</label><input type="number" id="vida" value="25"></div>
+      <div class="param-item"><label>Inflación tarifaria (%/año)</label><input type="number" id="inflTarifa" value="2" step="0.5"></div>
+    </div>
+    <button class="btn" onclick="calcular()">▶ Recalcular</button>
+  </div>
+
+  <!-- KPIs -->
+  <div class="kpi-grid" id="kpis"></div>
+
+  <!-- LCOE -->
+  <div class="card">
+    <h2>📐 LCOE — Costo Nivelado de Energía</h2>
+    <p class="subtitle">Costo real de cada kWh generado durante toda la vida útil del sistema</p>
+    <div class="lcoe-grid">
+      <div>
+        <div class="formula" id="lcoe-formula"></div>
+      </div>
+      <div id="lcoe-comp"></div>
+    </div>
+  </div>
+
+  <!-- Flujo de caja -->
+  <div class="card">
+    <h2>📊 Flujo de Caja — VAN y TIR</h2>
+    <p class="subtitle">Evolución del flujo neto acumulado descontado a lo largo de la vida útil</p>
+    <div class="bar-wrap" id="bars"></div>
+  </div>
+
+  <!-- Tabla detalle -->
+  <div class="card">
+    <h2>📋 Tabla de Flujos Anuales</h2>
+    <p class="subtitle">Incluye degradación del 0,3%/año, inflación tarifaria y valor presente de cada flujo</p>
+    <div style="overflow-x:auto">
+      <table id="tabla-flujos">
+        <thead>
+          <tr>
+            <th>Año</th>
+            <th>Gen. (kWh)</th>
+            <th>Tarifa (Bs/kWh)</th>
+            <th>Ingreso bruto (Bs)</th>
+            <th>O&M (Bs)</th>
+            <th>Flujo neto (Bs)</th>
+            <th>FP descontado (Bs)</th>
+            <th>VAN acumulado (Bs)</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Conclusión -->
+  <div class="conclusion-box" id="conclusion"></div>
+
+</div>
+
+<script>
+function fmt(n, dec=0){ return n.toLocaleString('es-BO', {minimumFractionDigits:dec, maximumFractionDigits:dec}); }
+
+function calcTIR(flujos, maxIter=200, tol=1e-7){
+  let r = 0.1;
+  for(let i=0;i<maxIter;i++){
+    let npv=0, dnpv=0;
+    flujos.forEach((f,t)=>{ npv+=f/Math.pow(1+r,t); dnpv+=-t*f/Math.pow(1+r,t+1); });
+    let nr = r - npv/dnpv;
+    if(Math.abs(nr-r)<tol){ return nr; }
+    r=nr;
+    if(r<-0.999) r=-0.999;
+  }
+  return r;
+}
+
+function calcular(){
+  const capex     = +document.getElementById('capex').value;
+  const gen1      = +document.getElementById('gen1').value;
+  const tarifa0   = +document.getElementById('tarifa').value;
+  const tasa      = +document.getElementById('tasa').value / 100;
+  const deg       = +document.getElementById('deg').value / 100;
+  const om        = +document.getElementById('om').value;
+  const vida      = +document.getElementById('vida').value;
+  const inflT     = +document.getElementById('inflTarifa').value / 100;
+
+  // Flujos: año 0 = -capex
+  const flujos = [-capex];
+  const rows = [];
+  let vanAcum = -capex;
+  let totalGenDesc = 0;
+  let totalGenNom  = 0;
+  let totalIngresos = 0;
+
+  for(let t=1; t<=vida; t++){
+    const gen    = gen1 * Math.pow(1-deg, t-1);
+    const tarifa = tarifa0 * Math.pow(1+inflT, t-1);
+    const ingreso = gen * tarifa;
+    const flujo  = ingreso - om;
+    const fp_desc = flujo / Math.pow(1+tasa, t);
+    vanAcum += fp_desc;
+    totalGenNom  += gen;
+    totalGenDesc += gen / Math.pow(1+tasa, t);
+    totalIngresos += ingreso;
+    flujos.push(flujo);
+    rows.push({ t, gen, tarifa, ingreso, om, flujo, fp_desc, vanAcum });
+  }
+
+  const van = vanAcum;
+  const tir = calcTIR(flujos) * 100;
+
+  // LCOE = (CAPEX + PV(O&M)) / PV(Generación)
+  let pvOM = 0;
+  for(let t=1;t<=vida;t++) pvOM += om / Math.pow(1+tasa,t);
+  const lcoe = (capex + pvOM) / totalGenDesc; // Bs/kWh
+
+  // Payback simple
+  let acum = -capex, payback = null;
+  for(let t=1;t<=vida;t++){
+    acum += rows[t-1].flujo;
+    if(acum>=0 && payback===null) payback=t;
+  }
+  // Payback descontado
+  let acumDesc = -capex, paybackDesc = null;
+  for(let t=1;t<=vida;t++){
+    acumDesc += rows[t-1].fp_desc;
+    if(acumDesc>=0 && paybackDesc===null) paybackDesc=t;
+  }
+
+  // KPIs
+  document.getElementById('kpis').innerHTML = `
+    <div class="kpi good"><div class="kpi-label">VAN (${document.getElementById('tasa').value}%)</div><div class="kpi-value">${fmt(van)} Bs</div><div class="kpi-sub">Valor neto a precios de hoy</div></div>
+    <div class="kpi ${tir>tasa*100?'good':'red'}"><div class="kpi-label">TIR</div><div class="kpi-value">${fmt(tir,1)}%</div><div class="kpi-sub">Tasa de descuento: ${document.getElementById('tasa').value}%</div></div>
+    <div class="kpi info"><div class="kpi-label">LCOE</div><div class="kpi-value">${fmt(lcoe,3)} Bs/kWh</div><div class="kpi-sub">Tarifa red: ${fmt(tarifa0,3)} Bs/kWh</div></div>
+    <div class="kpi warn"><div class="kpi-label">Payback simple</div><div class="kpi-value">${payback ? payback+' años' : '>'+vida+'a'}</div><div class="kpi-sub">Descontado: ${paybackDesc ? paybackDesc+' años' : '>'+vida+'a'}</div></div>
+    <div class="kpi good"><div class="kpi-label">Ahorro acumulado</div><div class="kpi-value">${fmt(totalIngresos - om*vida)} Bs</div><div class="kpi-sub">En ${vida} años (nominal)</div></div>
+    <div class="kpi info"><div class="kpi-label">Relación B/C</div><div class="kpi-value">${fmt((van+capex)/capex,2)}</div><div class="kpi-sub">Beneficio por cada Bs invertido</div></div>
+  `;
+
+  // LCOE fórmula
+  document.getElementById('lcoe-formula').innerHTML =
+    `LCOE = (CAPEX + VP(O&amp;M)) / VP(Generación)\n\n` +
+    `CAPEX          = ${fmt(capex)} Bs\n` +
+    `VP(O&amp;M)        = ${fmt(pvOM)} Bs\n` +
+    `VP(Generación) = ${fmt(totalGenDesc)} kWh\n\n` +
+    `LCOE = ${fmt(capex+pvOM)} / ${fmt(totalGenDesc)}\n` +
+    `     = ${fmt(lcoe,4)} Bs/kWh\n\n` +
+    `Tarifa red actual = ${fmt(tarifa0,3)} Bs/kWh\n` +
+    `Ahorro por kWh    = ${fmt(tarifa0-lcoe,4)} Bs/kWh ✓`;
+
+  document.getElementById('lcoe-comp').innerHTML = `
+    <div style="font-size:0.82rem;color:#2d3748;line-height:1.8;">
+      <strong>Interpretación del LCOE:</strong><br>
+      El LCOE de <strong>${fmt(lcoe,3)} Bs/kWh</strong> representa el costo real de producir cada kWh durante los ${vida} años de vida útil, incluyendo la inversión inicial y los costos de mantenimiento descontados.<br><br>
+      Como el LCOE (<strong>${fmt(lcoe,3)}</strong>) es menor que la tarifa de la red (<strong>${fmt(tarifa0,3)} Bs/kWh</strong>), cada kWh generado representa un <strong>ahorro neto de ${fmt(tarifa0-lcoe,4)} Bs</strong>.<br><br>
+      <span style="color:#2d7a4f;font-weight:700;">✓ El sistema es económicamente competitivo frente a la red.</span>
+    </div>
+  `;
+
+  // Barras (selección de años)
+  const selYears = [1,2,3,4,5,6,7,8,9,10,15,20,25].filter(y=>y<=vida);
+  const maxVan = Math.max(...selYears.map(y=>rows[y-1].vanAcum));
+  const maxGen = Math.max(...selYears.map(y=>rows[y-1].gen));
+  let barsHtml = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:0 32px">`;
+  barsHtml += `<div><strong style="font-size:0.78rem;color:#718096;text-transform:uppercase;letter-spacing:.05em">Generación anual (kWh)</strong></div>`;
+  barsHtml += `<div><strong style="font-size:0.78rem;color:#718096;text-transform:uppercase;letter-spacing:.05em">VAN acumulado (Bs)</strong></div>`;
+  selYears.forEach(y=>{
+    const r = rows[y-1];
+    const gPct = (r.gen/maxGen*100).toFixed(1);
+    const vPct = Math.max(0,(r.vanAcum/maxVan*100)).toFixed(1);
+    const vanColor = r.vanAcum<0?'#dc2626':'#2d7a4f';
+    barsHtml += `
+      <div class="bar-row"><div class="bar-label">Año ${y}</div><div class="bar-track"><div class="bar-fill gen" style="width:${gPct}%"></div></div><div class="bar-val">${fmt(r.gen,0)} kWh</div></div>
+      <div class="bar-row"><div class="bar-label">Año ${y}</div><div class="bar-track"><div class="bar-fill van" style="width:${vPct}%;background:${r.vanAcum<0?'#fca5a5':''}"></div></div><div class="bar-val" style="color:${vanColor}">${fmt(r.vanAcum,0)} Bs</div></div>
+    `;
+  });
+  barsHtml += `</div>`;
+  document.getElementById('bars').innerHTML = barsHtml;
+
+  // Tabla
+  let tbodyHtml = '';
+  rows.forEach(r=>{
+    const cls = r.vanAcum>=0?'pos':'neg';
+    const hlClass = r.vanAcum>=0 && rows[r.t-2]?.vanAcum<0 ? 'hl' : '';
+    tbodyHtml += `<tr class="${hlClass}">
+      <td>${r.t}</td>
+      <td>${fmt(r.gen,0)}</td>
+      <td>${fmt(r.tarifa,4)}</td>
+      <td>${fmt(r.ingreso,0)}</td>
+      <td>${fmt(r.om,0)}</td>
+      <td>${fmt(r.flujo,0)}</td>
+      <td>${fmt(r.fp_desc,0)}</td>
+      <td class="${cls}">${fmt(r.vanAcum,0)}</td>
+    </tr>`;
+  });
+  document.getElementById('tbody').innerHTML = tbodyHtml;
+
+  // Conclusión
+  const rentable = van > 0 && tir > parseFloat(document.getElementById('tasa').value);
+  document.getElementById('conclusion').innerHTML = `
+    <h3>📝 Conclusión del análisis financiero</h3>
+    <p>
+      Con una inversión inicial de <strong>${fmt(capex)} Bs</strong>, el sistema fotovoltaico de 18,5 kWp presenta un 
+      <strong>VAN de ${fmt(van)} Bs</strong> y una <strong>TIR de ${fmt(tir,1)}%</strong>, 
+      ${rentable ? 'superando ampliamente la tasa de descuento del '+document.getElementById('tasa').value+'%, lo que confirma que el proyecto es <strong>financieramente rentable y recomendable</strong>.' : 'lo cual requiere revisión de los supuestos.'}<br><br>
+      El <strong>LCOE de ${fmt(lcoe,3)} Bs/kWh</strong> es significativamente inferior a la tarifa de la red eléctrica (${fmt(tarifa0,3)} Bs/kWh), 
+      lo que valida la conveniencia económica de la autogeneración solar frente al consumo de la red convencional. 
+      La inversión se recupera en aproximadamente <strong>${payback} años</strong> (${paybackDesc} años en términos descontados), 
+      dejando más de <strong>${vida-paybackDesc} años de beneficios netos</strong> dentro de la vida útil garantizada de los paneles.
+    </p>
+  `;
+}
+
+// Ejecutar al cargar
+calcular();
+</script>
+</body>
+</html>
